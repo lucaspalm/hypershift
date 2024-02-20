@@ -94,6 +94,7 @@ func main() {
 
 type StartOptions struct {
 	Namespace                        string
+	WatchNamespace                   string
 	DeploymentName                   string
 	PodName                          string
 	MetricsAddr                      string
@@ -118,6 +119,7 @@ func NewStartCommand() *cobra.Command {
 
 	opts := StartOptions{
 		Namespace:                        "hypershift",
+		WatchNamespace:                   "hypershift",
 		DeploymentName:                   "operator",
 		MetricsAddr:                      "0",
 		CertDir:                          "",
@@ -129,6 +131,7 @@ func NewStartCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&opts.Namespace, "namespace", opts.Namespace, "The namespace this operator lives in")
+	cmd.Flags().StringVar(&opts.WatchNamespace, "watch-namespace", opts.WatchNamespace, "The namespace this operator will watch for hostedcluster CRD changes in")
 	cmd.Flags().StringVar(&opts.DeploymentName, "deployment-name", opts.DeploymentName, "Legacy flag, does nothing. Use --pod-name instead.")
 	cmd.Flags().StringVar(&opts.PodName, "pod-name", opts.PodName, "The name of the pod the operator runs in")
 	cmd.Flags().StringVar(&opts.MetricsAddr, "metrics-addr", opts.MetricsAddr, "The address the metric endpoint binds to.")
@@ -195,6 +198,17 @@ func run(ctx context.Context, opts *StartOptions, log logr.Logger) error {
 		LeaseDuration:                 &leaseDuration,
 		RenewDeadline:                 &renewDeadline,
 		RetryPeriod:                   &retryPeriod,
+		// Cache: cache.Options{
+		// 	DefaultNamespaces: map[string]cache.Config{
+		// 		opts.WatchNamespace: {},
+		// 	},
+		// },
+		// NewCache: func(config *rest.Config, copts cache.Options) (cache.Cache, error) {
+		// 	copts.DefaultNamespaces = map[string]cache.Config{
+		// 		opts.WatchNamespace: {},
+		// 	}
+		// 	return cache.New(config, copts)
+		// },
 	})
 	if err != nil {
 		return fmt.Errorf("unable to start manager: %w", err)

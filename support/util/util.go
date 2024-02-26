@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -284,4 +286,44 @@ func FirstUsableIP(cidr string) (string, error) {
 	ip := ipNet.IP
 	ip[len(ipNet.IP)-1]++
 	return ip.String(), nil
+}
+
+// PredicatesForHostedClusterNamespaceScoping returns predicate filters for all event types that will ignore incoming event requests for hostedcluster resources that do not exist in the namespace
+// specified in the HOSTEDCLUSTERS_NAMESPACE_SCOPE env var.  If the env var is empty, the default behavior is to accept all events cluster-wide.
+func PredicatesForHostedClusterNamespaceScoping() predicate.Predicate {
+	hostedClustersNamespacScope := os.Getenv("HOSTEDCLUSTERS_NAMESPACE_SCOPE")
+	filter := func(obj client.Object) bool {
+		if hostedClustersNamespacScope == "" {
+			return true
+		}
+		if obj.GetNamespace() != hostedClustersNamespacScope {
+			return false
+		}
+		return true
+	}
+	return predicate.NewPredicateFuncs(filter)
+}
+
+// PredicatesForHostedClusterChildResourcesNamespaceScoping returns predicate filters for all event types that will ignore incoming event requests for resources in which the parent hostedcluster does not
+// exist in the namespace specified in the HOSTEDCLUSTERS_NAMESPACE_SCOPE env var.  If the env var is empty, the default behavior is to accept all events cluster-wide.
+func PredicatesForHostedClusterChildResourcesNamespaceScoping() predicate.Predicate {
+	hostedClustersNamespacScope := os.Getenv("HOSTEDCLUSTERS_NAMESPACE_SCOPE")
+	filter := func(obj client.Object) bool {
+		if hostedClustersNamespacScope == "" {
+			return true
+		}
+		hostedClusterName := ""
+		if obj.GetAnnotations() != nil {
+			hostedClusterName = obj.GetAnnotations()["hypershift.openshift.io/cluster"]
+		}
+		if hostedClusterName == "" {
+			return false
+		}
+		namespacedName := ParseNamespacedName(hostedClusterName)
+		if namespacedName.Namespace != hostedClustersNamespacScope {
+			return false
+		}
+		return true
+	}
+	return predicate.NewPredicateFuncs(filter)
 }
